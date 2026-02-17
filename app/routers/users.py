@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import Optional
+from urllib.parse import urlencode
 from app.dependencies import get_current_user
 from app.models import User
 from app.schemas import UserRegister, UserLogin, UserResponse, TokenResponse
@@ -76,6 +77,7 @@ def get_my_profile(current_user: User = Depends(get_current_user)):
 
 @router.get("/user_data")
 def get_all_users(
+    request: Request,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
     search: Optional[str] = Query(None, description="Search by full_name or email"),
@@ -106,9 +108,25 @@ def get_all_users(
     # Apply pagination
     users = query.offset(skip).limit(page_size).all()
     
-    # Calculate next and previous page numbers
-    next_page = page + 1 if page < total_pages else None
-    previous_page = page - 1 if page > 1 else None
+    # Build base URL
+    base_url = str(request.url).split('?')[0]  # Get URL without query parameters
+    
+    # Build query parameters for links
+    def build_query_params(page_num: int) -> str:
+        params = {"page": page_num, "page_size": page_size}
+        if search:
+            params["search"] = search
+        return urlencode(params)
+    
+    # Generate next and previous page links
+    next_link = None
+    previous_link = None
+    
+    if page < total_pages:
+        next_link = f"{base_url}?{build_query_params(page + 1)}"
+    
+    if page > 1:
+        previous_link = f"{base_url}?{build_query_params(page - 1)}"
     
     return {
         "pagination": {
@@ -116,8 +134,8 @@ def get_all_users(
             "page": page,
             "page_size": page_size,
             "total_pages": total_pages,
-            "next": next_page,
-            "pre": previous_page
+            "next": next_link,
+            "pre": previous_link
         },
         "status": 200,
         "message": "Data found Successfully",
