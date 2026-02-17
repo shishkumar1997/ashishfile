@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from jose import ExpiredSignatureError, JWTError
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from typing import Optional
 from urllib.parse import urlencode
 from app.dependencies import get_current_user
-from app.models import User
+from app.models import User, UserRole
 from app.schemas import (
     UserRegister, UserLogin, UserResponse, TokenResponse
 )
@@ -107,8 +108,6 @@ def get_all_users(
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0
     skip = (page - 1) * page_size
     
-    # Apply pagination
-    users = query.offset(skip).limit(page_size).all()
     
     # Build base URL
     base_url = str(request.url).split('?')[0]  # Get URL without query parameters
@@ -119,6 +118,9 @@ def get_all_users(
         if search:
             params["search"] = search
         return urlencode(params)
+
+    # Apply pagination
+    users = query.offset(skip).limit(page_size).all()
     
     # Generate next and previous page links
     next_link = None
